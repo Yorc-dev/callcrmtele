@@ -10,6 +10,7 @@ from telethon.errors import (
     FloodWaitError,
     UsernameNotOccupiedError,
 )
+from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.types import (
     Channel,
     MessageMediaDocument,
@@ -75,8 +76,10 @@ class TelegramParser:
                     logger.debug("'%s' is not a Channel entity, skipping.", username)
                     return None
 
-                full = await self._client.get_full_entity(entity)
-                subscribers = getattr(full.full_chat, "participants_count", None)
+                # Use GetFullChannelRequest — the correct Telethon API for full channel info
+                full_channel = await self._client(GetFullChannelRequest(channel=entity))
+                full_chat = full_channel.full_chat
+                subscribers = getattr(full_chat, "participants_count", None)
 
                 # Avatar URL is not directly available via Telethon without downloading;
                 # store a placeholder reference if the channel has a photo.
@@ -89,7 +92,7 @@ class TelegramParser:
                     "channel_id": entity.id,
                     "username": entity.username,
                     "title": entity.title,
-                    "description": getattr(full.full_chat, "about", None),
+                    "description": getattr(full_chat, "about", None),
                     "subscribers_count": subscribers,
                     "avatar_url": avatar_url,
                     "is_verified": getattr(entity, "verified", False),
@@ -99,7 +102,7 @@ class TelegramParser:
             except FloodWaitError as exc:
                 wait_time = exc.seconds + _FLOOD_WAIT_BUFFER
                 logger.warning(
-                    "FloodWaitError for '%s': waiting %.0f seconds…", username, wait_time
+                    "FloodWaitError for '%s': waiting %.0f seconds...", username, wait_time
                 )
                 await asyncio.sleep(wait_time)
                 # After waiting, retry immediately (don't count as a regular retry)
@@ -190,7 +193,7 @@ class TelegramParser:
             except FloodWaitError as exc:
                 wait_time = exc.seconds + _FLOOD_WAIT_BUFFER
                 logger.warning(
-                    "FloodWaitError fetching posts for channel %d: waiting %.0f seconds…",
+                    "FloodWaitError fetching posts for channel %d: waiting %.0f seconds...",
                     channel_id,
                     wait_time,
                 )
